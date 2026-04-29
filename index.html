@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escala de Trabalho | Gestão de Escalas</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p id="loadingText">Carregando...</p>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <i class="fas fa-calendar-check"></i>
+            <span>Escala de Trabalho</span>
+        </div>
+
+        <nav class="nav-group">
+            <span class="nav-label">Equipes</span>
+            <ul class="team-list" id="teamList">
+                <!-- Teams will be injected here -->
+            </ul>
+        </nav>
+
+        <div class="nav-group restricted-admin" style="display: none;">
+            <span class="nav-label">Dados & Nuvem</span>
+            <div class="team-item btn-success" id="btnSaveCloud" onclick="saveToCloud()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>Salvar Nuvem</span>
+            </div>
+            <div class="team-item btn-primary" id="btnLoadCloud" onclick="loadFromCloud()">
+                <i class="fas fa-cloud-download-alt"></i>
+                <span>Baixar Dados</span>
+            </div>
+            <div class="team-item" style="background: rgba(3,169,244,0.1); color: #03a9f4;" onclick="openVacationModal()">
+                <i class="fas fa-plane"></i>
+                <span>Marcar Férias</span>
+            </div>
+            <div class="team-item" onclick="toggleSettingsModal()" style="margin-top: 0.5rem; background: rgba(255,255,255,0.05);">
+                <i class="fas fa-cog"></i>
+                <span>Ajustes de Equipe</span>
+            </div>
+            <button class="import-btn" onclick="document.getElementById('excelInput').click()" style="margin-top: 0.5rem;">
+                <i class="fas fa-file-import"></i>
+                <span>Importar Arquivo</span>
+            </button>
+            <input type="file" id="excelInput" style="display: none;" accept=".xlsx, .xls, .csv"
+                onchange="handleExcelImport(event)">
+        </div>
+
+        <div class="nav-group" style="margin-top: auto; border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+            <div class="team-item" id="btnAdminToggle" onclick="toggleAdminMode()" style="color: var(--text-muted);">
+                <i class="fas fa-lock"></i>
+                <span id="adminToggleText">Modo Leitura</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div class="current-team-info">
+                <h1 id="currentTeamName">Selecione uma Equipe</h1>
+                <div class="month-navigation">
+                    <button class="nav-arrow" onclick="changeMonth(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <p id="currentMonthYear">Abril 2026</p>
+                    <button class="nav-arrow" onclick="changeMonth(1)"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <div class="header-stats">
+                <div class="stat-badge presencial">
+                    <span class="stat-label">Presencial</span>
+                    <span class="stat-count" id="totalPresencial">0</span>
+                </div>
+                <div class="stat-badge home-office">
+                    <span class="stat-label">Home Office</span>
+                    <span class="stat-count" id="totalHomeOffice">0</span>
+                </div>
+            </div>
+
+            <div class="header-search">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="memberSearch" placeholder="Filtrar por nome..."
+                        oninput="handleSearch(this.value)">
+                </div>
+            </div>
+
+        </header>
+
+        <!-- Legend Panel moved to top -->
+        <div class="legend-panel">
+            <div class="legend-item"><div class="legend-color status-t"></div><span>T: Presencial</span></div>
+            <div class="legend-item"><div class="legend-color status-ho"></div><span>HO: Home Office</span></div>
+            <div class="legend-item"><div class="legend-color status-bh"></div><span>BH: Banco de Horas</span></div>
+            <div class="legend-item"><div class="legend-color status-f"></div><span>F: Férias</span></div>
+            <div class="legend-item"><div class="legend-color status-fr"></div><span>FR: Feriado</span></div>
+            <div class="legend-item"><div class="legend-color status-fq"></div><span>FQ: Folga Quebra Escala</span></div>
+            <div class="legend-item"><div class="legend-color status-at"></div><span>AT: Atestado</span></div>
+            <div class="legend-item"><div class="legend-color status-off"></div><span>OFF: Day Off</span></div>
+        </div>
+
+        <section class="roster-container">
+            <div class="roster-card">
+                <table class="roster-table">
+                    <thead>
+                        <tr id="tableHeader">
+                            <!-- Headers will be injected here -->
+                        </tr>
+                    </thead>
+                    <tbody id="rosterBody">
+                        <!-- Rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+
+    </main>
+
+    <!-- Status Picker Modal -->
+    <div id="statusPicker" class="status-picker">
+        <div class="picker-header">Escolher Status</div>
+        <div class="picker-grid">
+            <div class="picker-item status-t" data-status="T">T</div>
+            <div class="picker-item status-ho" data-status="HO">HO</div>
+            <div class="picker-item status-bh" data-status="BH">BH</div>
+            <div class="picker-item status-f" data-status="F">F</div>
+            <div class="picker-item status-fr" data-status="FR">FR</div>
+            <div class="picker-item status-fq" data-status="FQ">FQ</div>
+            <div class="picker-item status-at" data-status="AT">AT</div>
+            <div class="picker-item status-off" data-status="OFF">OFF</div>
+            <div class="picker-item status-fs" data-status="FS">FS</div>
+            <div class="picker-item status-empty" data-status="" title="Limpar">🧹</div>
+        </div>
+        <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase; font-weight: 600; text-align: center;">Lembrete (opcional)</div>
+            <input type="text" id="statusNoteInput" style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: white; padding: 0.5rem; border-radius: 6px; font-size: 0.8rem; outline: none; margin-bottom: 0.5rem;" placeholder="Ex: Férias até dia 15" onkeypress="if(event.key === 'Enter') saveNoteOnly()">
+            <button onclick="saveNoteOnly()" style="width: 100%; background: var(--accent); color: white; border: none; padding: 0.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; transition: var(--transition);">Salvar Lembrete</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Ajustes de Turnos</h2>
+                <button class="close-btn" onclick="toggleSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Gerencie os colaboradores e horários da equipe atual:</p>
+                <button class="save-btn" onclick="addNewMember()" style="margin-bottom: 1rem; background: var(--success); width: auto; padding: 0.5rem 1rem;">
+                    <i class="fas fa-plus"></i> Adicionar Colaborador
+                </button>
+                <div id="shiftSettingsList" class="shift-settings-list">
+                    <!-- Shift editors will be injected here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="save-btn" onclick="saveShiftChanges()">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div class="modal-header" style="justify-content: center; border-bottom: none;">
+                <h2><i class="fas fa-lock" style="color: var(--accent); margin-right: 10px;"></i>Acesso Restrito</h2>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1.5rem; color: var(--text-muted);">Digite a senha de administrador para liberar a edição.</p>
+                <input type="password" id="adminPasswordInput" placeholder="Senha" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none; text-align: center; font-size: 1.2rem; letter-spacing: 5px;" onkeypress="if(event.key === 'Enter') checkPassword()">
+                <p id="passwordError" style="color: var(--danger); margin-top: 1rem; display: none;">Senha incorreta!</p>
+            </div>
+            <div class="modal-footer" style="border-top: none; justify-content: center; gap: 1rem;">
+                <button onclick="closePasswordModal()" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                <button class="save-btn" onclick="checkPassword()" style="width: auto; padding: 0.5rem 2rem;">Desbloquear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Member Modal -->
+    <div id="addMemberModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Adicionar Colaborador</h2>
+                <button class="close-btn" onclick="closeAddMemberModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Nome Completo</label>
+                    <input type="text" id="newMemberName" placeholder="Ex: João Silva" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none;">
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Turno</label>
+                    <input type="text" id="newMemberShift" placeholder="Ex: Turno A (06:00 - 16:00)" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none; margin-bottom: 1rem;">
+                </div>
+                <div style="margin-bottom: 1rem; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--border);">
+                    <label style="display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 0.9rem; cursor: pointer;">
+                        <input type="checkbox" id="newMemberRotation" style="width: 18px; height: 18px;">
+                        <span>Participa do Rodízio de FDS</span>
+                    </label>
+                    <div id="newMemberRotationGroupDiv" style="margin-top: 1rem; display: none;">
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Grupo de Rodízio</label>
+                        <select id="newMemberRotationGroup" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none;">
+                            <option value="0">Grupo 1 (Sex/Sáb)</option>
+                            <option value="1">Grupo 2 (Sáb/Dom)</option>
+                            <option value="2">Grupo 3 (Dom/Seg)</option>
+                        </select>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem;">As folgas giram entre os 3 grupos a cada semana.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeAddMemberModal()" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                <button class="save-btn" onclick="confirmAddMember()" style="width: auto; padding: 0.5rem 2rem;">Adicionar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vacation Modal -->
+    <div id="vacationModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-plane" style="margin-right: 10px; color: var(--accent);"></i>Marcar Férias</h2>
+                <button class="close-btn" onclick="closeVacationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem;">Selecione o colaborador e o período. O sistema marcará "F" em todos os dias selecionados.</p>
+                
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Colaborador</label>
+                    <select id="vacationMemberSelect" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none;">
+                        <!-- Options will be injected here -->
+                    </select>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Data de Início</label>
+                        <input type="date" id="vacationStartDate" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Data de Fim</label>
+                        <input type="date" id="vacationEndDate" style="width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.75rem; border-radius: 8px; outline: none;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeVacationModal()" style="background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                <button class="save-btn" onclick="confirmVacation()" style="width: auto; padding: 0.5rem 2rem; background: var(--accent);">Confirmar Férias</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js?v=3"></script>
+    <button class="mobile-menu-toggle" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+</body>
+
+</html>
